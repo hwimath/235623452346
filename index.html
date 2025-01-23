@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>지수 방정식 응용과 활용(근과 계수의 관계, 문장제)</title>
+
+<!-- MathJax 로드 (LaTeX 수식 렌더링) -->
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+
+<style>
+  /* 흑백 색상 구성 */
+  body {
+    background-color: #fff;
+    color: #000;
+    margin: 20px;
+    font-family: sans-serif;
+  }
+  h1, h2, h3 {
+    margin: 0.5em 0;
+  }
+  button, input {
+    background-color: #000;
+    color: #fff;
+    border: 1px solid #000;
+    padding: 0.5em 1em;
+    cursor: pointer;
+  }
+  #gameScreen, #questionContainer, #resultContainer, #response {
+    margin-top: 1em;
+  }
+  #energyBarContainer {
+    width: 200px; 
+    height: 20px; 
+    background-color: #ccc; 
+    position: relative;
+    margin-bottom: 10px;
+  }
+  #energyBar {
+    width: 100%; 
+    height: 100%; 
+    background-color: #000;
+    position: absolute; 
+    top: 0; 
+    left: 0;
+  }
+  .choiceItem {
+    margin: 0.3em 0;
+  }
+  #scoreBoard {
+    margin-top: 1em;
+    font-weight: bold;
+  }
+  #response {
+    white-space: pre-wrap;
+    margin-top: 1em;
+    padding: 1em;
+    background: #eee;
+  }
+</style>
+
+</head>
+<body>
+
+<h1>지수 방정식 응용과 활용(근과 계수의 관계, 문장제)</h1>
+
+<!-- 난이도 선택 및 이름 입력 화면 -->
+<div id="startScreen">
+  <p>이름을 입력하세요:</p>
+  <input type="text" id="playerName" placeholder="이름">
+  
+  <p>난이도를 선택하세요:</p>
+  <label><input type="radio" name="difficulty" value="top">최상(20초)</label><br>
+  <label><input type="radio" name="difficulty" value="high">상(30초)</label><br>
+  <label><input type="radio" name="difficulty" value="mid">중(40초)</label><br>
+  <label><input type="radio" name="difficulty" value="low" checked>하(시간제한 없음)</label><br><br>
+  
+  <button onclick="startGame()">게임 시작</button>
+</div>
+
+<!-- 게임 진행 화면 -->
+<div id="gameScreen" style="display:none;">
+  <div>
+    <span id="globalTimeLabel">전체 게임 시간: 0초</span>
+    <span style="margin-left:20px;">남은 기회: <span id="lifeCount">3</span></span>
+    <span style="margin-left:20px;">점수: <span id="score">0</span></span>
+  </div>
+  
+  <!-- 에너지바 (시간 제한 시각화) -->
+  <div id="energyBarContainer">
+    <div id="energyBar"></div>
+  </div>
+  
+  <div id="questionContainer"></div>
+  
+  <div id="feedback" style="margin-top:1em; font-weight:bold;"></div>
+</div>
+
+<!-- 게임 종료 후 점수 전송 화면 -->
+<div id="resultContainer" style="display:none;">
+  <h2>게임 종료</h2>
+  <p>최종 점수: <span id="finalScore">0</span></p>
+  <p>전체 소요 시간: <span id="finalTime">0</span>초</p>
+  <button onclick="submitScore()">점수 전송</button>
+  <div id="response"></div>
+</div>
+
+<script>
+/* 
+ * 문제 데이터 (18문항 전부, 각 문항에 조건/질문/보기 4개/정답).
+ * 보기 섞음을 위해 choices 배열을 "text", "isCorrect"로 관리.
+ * 문제 순서도 무작위로 섞어서 무한 반복 출제합니다.
+ */
+const problems = [
+  {
+    question: 
+`다음 지수방정식 \\(2^{2x+1} - 2^{x+1} - 6 = 0\\)의 
+두 근을 \\(\\alpha,\\beta\\)라 할 때, 
+\\(2^{2\\alpha} + 2^{2\\beta}\\)의 값을 구하시오.`,
+    choices: [
+      {text: "5", isCorrect: false},
+      {text: "6", isCorrect: false},
+      {text: "7", isCorrect: true},
+      {text: "8", isCorrect: false}
+    ]
+  },
+  {
+    question: 
+`다음 지수방정식 \\(4^x - 2^{x+3} + 6 = 0\\)의 
+두 근을 \\(\\alpha,\\beta\\)라 할 때, 
+\\(2^{2\\alpha} + 2^{2\\beta}\\)의 값을 구하시오.
+(\\(4^x = 2^{2x}\\)임에 유의.)`,
+    choices: [
+      {text: "26", isCorrect: false},
+      {text: "42", isCorrect: false},
+      {text: "52", isCorrect: true},
+      {text: "62", isCorrect: false}
+    ]
+  },
+  {
+    question: 
+`다음 지수방정식 \\(4^x - 2^{x+3} + 1 = 0\\)의
+두 근을 \\(\\alpha,\\beta\\)라 할 때,
+\\(2^{2\\alpha} + 2^{2\\beta}\\)의 값을 구하시오.`,
+    choices: [
+      {text: "52", isCorrect: false},
+      {text: "56", isCorrect: false},
+      {text: "58", isCorrect: false},
+      {text: "62", isCorrect: true}
+    ]
+  },
+  {
+    question: 
+`방정식 \\(4^x - 2^{x+1} + 2a + 1 = 0\\)이 
+서로 다른 두 실근을 갖도록 하는 실수 \\(a\\)의 값의 범위를 구하시오.`,
+    choices: [
+      {text: "\\(-1 < a < 0\\)",      isCorrect: false},
+      {text: "\\(-\\tfrac{1}{2} < a < 0\\)", isCorrect: true},
+      {text: "\\(0 < a < 1\\)",       isCorrect: false},
+      {text: "\\(-1 < a < \\tfrac{1}{2}\\)", isCorrect: false}
+    ]
+  },
+  {
+    question:
+`지수방정식 \\(a^{2x} - 5a^x + 6 = 0\\)의 
+두 근의 합이 2일 때, 양수 \\(a\\)의 값을 구하시오.`,
+    choices: [
+      {text: "\\(\\sqrt{2}\\)", isCorrect: false},
+      {text: "\\(\\sqrt{3}\\)", isCorrect: false},
+      {text: "\\(\\sqrt{5}\\)", isCorrect: false},
+      {text: "\\(\\sqrt{6}\\)", isCorrect: true}
+    ]
+  },
+  {
+    question:
+`방정식 \\(9^x - 2 \\cdot 3^x + 3a = 0\\)이 
+서로 다른 두 실근을 갖도록 하는 실수 \\(a\\)의 값의 범위를 구하시오.`,
+    choices: [
+      {text: "\\(0 < a < \\tfrac{1}{3}\\)", isCorrect: true},
+      {text: "\\(-\\tfrac{1}{2} < a < 0\\)", isCorrect: false},
+      {text: "\\(\\tfrac{1}{3} < a < 1\\)",  isCorrect: false},
+      {text: "\\(a > 1\\)",                 isCorrect: false}
+    ]
+  },
+  {
+    question:
+`방정식 \\(9^x - 2a \\cdot 3^x + 2a + 8 = 0\\)이 
+서로 다른 두 실근을 갖도록 하는 **정수** \\(a\\)의 최소값을 구하시오.`,
+    choices: [
+      {text: "\\(a=3\\)", isCorrect: false},
+      {text: "\\(a=4\\)", isCorrect: false},
+      {text: "\\(a=5\\)", isCorrect: true},
+      {text: "\\(a=6\\)", isCorrect: false}
+    ]
+  },
+  {
+    question:
+`방정식 \\(9^x - 3^{x+1} + k = 0\\)이 
+서로 다른 두 실근을 갖도록 하는 실수 \\(k\\)의 값의 범위를 구하시오.`,
+    choices: [
+      {text: "\\(k < 0\\)",         isCorrect: false},
+      {text: "\\(0 < k < \\tfrac{9}{2}\\)", isCorrect: false},
+      {text: "\\(0 < k < \\tfrac{9}{4}\\)", isCorrect: true},
+      {text: "\\(-1 < k < 1\\)",    isCorrect: false}
+    ]
+  },
+  {
+    question:
+`방정식 \\(3^{2x+3} - 4 \\cdot 3^{x+1} + 1 = 0\\)의 
+두 실근을 \\(\\alpha,\\beta\\)라 할 때, \\(\\alpha \\cdot \\beta\\)를 구하시오.`,
+    choices: [
+      {text: "-3", isCorrect: false},
+      {text: "-2", isCorrect: false},
+      {text: "1",  isCorrect: false},
+      {text: "2",  isCorrect: true}
+    ]
+  },
+  {
+    question:
+`방정식 \\(a^{2x} - 10a^x + 9 = 0\\)의 
+두 근의 합이 2일 때, 양수 \\(a\\)의 값을 구하시오.`,
+    choices: [
+      {text: "2",  isCorrect: false},
+      {text: "3",  isCorrect: true},
+      {text: "4",  isCorrect: false},
+      {text: "9",  isCorrect: false}
+    ]
+  },
+  {
+    question:
+`지수방정식 \\(4^x - 11 \\cdot 2^x + 8 = 0\\)의 
+두 근을 \\(\\alpha,\\beta\\)라 할 때, 
+\\(\\alpha + \\beta\\)의 값을 구하시오.`,
+    choices: [
+      {text: "2", isCorrect: false},
+      {text: "3", isCorrect: true},
+      {text: "4", isCorrect: false},
+      {text: "5", isCorrect: false}
+    ]
+  },
+  {
+    question:
+`방정식 \\(3^{2x} - 3 \\cdot 3^x + 2 = 0\\)의 
+두 근을 \\(\\alpha,\\beta\\)라 할 때, 
+\\(9^\\alpha + 9^\\beta\\)의 값을 구하시오.`,
+    choices: [
+      {text: "3", isCorrect: false},
+      {text: "4", isCorrect: false},
+      {text: "5", isCorrect: true},
+      {text: "6", isCorrect: false}
+    ]
+  },
+  {
+    question:
+`어떤 박테리아는 \\(n\\)시간 후에 \\(a^n\\)마리씩 증가한다.
+처음에 20마리였던 박테리아가 3시간 후 1280마리가 되었다면 \\(a=4\\)임을 알 수 있다.
+그렇다면, 같은 박테리아가 처음(20마리 시점)부터 몇 시간 후에 50마리가 되었고, 
+그 시점으로부터 5시간 뒤에는 51200마리가 되었다고 할 때 
+처음으로부터 몇 시간 후에 51200마리가 되는지 구하시오.
+(\\(\\log_4(2.5) \\approx 0.64\\) 참고 가능)`,
+    choices: [
+      {text: "3.0시간",    isCorrect: false},
+      {text: "5.0시간",    isCorrect: false},
+      {text: "약 5.64시간", isCorrect: true},
+      {text: "약 8.64시간", isCorrect: false}
+    ]
+  },
+  {
+    question:
+`처음 온도가 \\(5^\\circ\\mathrm{C}\\)인 음료수를 
+\\(30^\\circ\\mathrm{C}\\)인 야외에 두었더니 
+\\(f(t)=B+(A-B)p^{-kt}\\) 형태로 온도가 변화한다.
+3분 후 \\(15^\\circ\\mathrm{C}\\)가 되었고, 
+6분 후 음료수의 온도를 구하시오. 
+(단, 야외온도는 \\(30^\\circ\\mathrm{C}\\), 
+처음 음료수 온도는 \\(5^\\circ\\mathrm{C}\\).)`,
+    choices: [
+      {text: "\\(18^\\circ\\mathrm{C}\\)", isCorrect: false},
+      {text: "\\(19^\\circ\\mathrm{C}\\)", isCorrect: false},
+      {text: "\\(21^\\circ\\mathrm{C}\\)", isCorrect: true},
+      {text: "\\(24^\\circ\\mathrm{C}\\)", isCorrect: false}
+    ]
+  },
+  {
+    question:
+`어떤 방사성 물질은 7\\(n\\)일 후에 처음의 \\(\\bigl(\\tfrac12\\bigr)^n\\)이 된다.
+이 물질이 처음의 \\(\\tfrac{1}{128}\\)로 줄어드는 데 걸리는 일수를 구하시오.`,
+    choices: [
+      {text: "28일", isCorrect: false},
+      {text: "35일", isCorrect: false},
+      {text: "42일", isCorrect: false},
+      {text: "49일", isCorrect: true}
+    ]
+  },
+  {
+    question:
+`두 회사 \\(A,B\\)의 매출액이 2006년 말 \\(A:200\\)억, \\(B:100\\)억에서 
+2016년 말 \\(A:600\\)억, \\(B:900\\)억이 되었다.
+\\(n\\)년간 \\(a\\)에서 \\(b\\)로 변할 때 
+\\(\\bigl(\\tfrac{b}{a}\\bigr)^{1/n}-1\\)을 연평균 성장률이라 할 때,
+2006년 말부터 2016년 말까지 10년간 \\(B\\)회사의 연평균 성장률은 
+\\(A\\)회사의 연평균 성장률의 몇 배인지 구하시오.
+(\\(3^{10} \\approx 3.36\\) 등 근사치 사용 가능)`,
+    choices: [
+      {text: "약 1.5배", isCorrect: false},
+      {text: "약 2.1배", isCorrect: true},
+      {text: "약 2.3배", isCorrect: false},
+      {text: "약 3.0배", isCorrect: false}
+    ]
+  },
+  {
+    question:
+`어떤 치료용 주사액이 혈관에 주입된 후 지수적으로 흡수되어, 
+\\(t\\)시간 후 혈액 속에 남아 있는 양을 
+처음 주사한 양의 \\(ab^t\\)라 하자.
+2시간 후 \\(\\tfrac{1}{12}\\), 
+5시간 후 \\(\\tfrac{1}{96}\\)가 되었다면, 
+\\(n\\)시간 후 \\(\\tfrac{1}{384}\\)가 되는 때의 \\(n\\)을 구하시오.`,
+    choices: [
+      {text: "6", isCorrect: false},
+      {text: "7", isCorrect: true},
+      {text: "8", isCorrect: false},
+      {text: "9", isCorrect: false}
+    ]
+  },
+  {
+    question:
+`어떤 박테리아가 \\(1g\\)이 \\(x\\)시간 뒤 \\(a^x g\\)로 증식된다고 한다.
+처음에 \\(2g\\)였던 박테리아가 2시간 후 \\(16g\\)이 되었다면 이를 통해 \\(a\\)를 구할 수 있다.
+이어서 \\(4g\\)였던 박테리아가 증식을 시작한 지 몇 시간 후 \\(2048g\\)이 되는지 구하시오.
+(\\(a > 0\\))`,
+    choices: [
+      {text: "4시간", isCorrect: false},
+      {text: "5시간", isCorrect: false},
+      {text: "6시간", isCorrect: true},
+      {text: "7시간", isCorrect: false}
+    ]
+  }
+];
+
+/* 전역 변수 */
+let difficulty = "low";
+let timeLimitPerQuestion = Infinity; 
+let pointsPerQuestion = 10;
+
+let currentEnergy = Infinity; // 남은 시간(초)을 표시하기 위한 변수(난이도 하=무제한이면 Infinity)
+let energyInterval = null;    // 에너지바 감소 setInterval
+let globalTime = 0;           // 전체 게임 시간(초)
+let globalTimeInterval = null; 
+
+let life = 3;                 // 남은 기회
+let score = 0;                // 점수
+let player = "";              // 플레이어 이름
+
+// 문제 출제용 인덱스 (무작위 반복)
+let problemIndexArray = [];
+let currentProblemIndex = 0;
+
+/* 배열 섞기 함수 (Fisher–Yates) */
+function shuffleArray(array) {
+  for(let i=array.length-1; i>0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+/* 보기도 섞기 */
+function shuffleChoices(prob) {
+  prob.choices = shuffleArray(prob.choices);
+}
+
+/* 준비: 문제 목록 전체를 무작위 순서로 돌도록 인덱스 배열 만들고 섞기 */
+function initProblemIndexArray() {
+  problemIndexArray = [];
+  for(let i=0; i<problems.length; i++){
+    problemIndexArray.push(i);
+  }
+  shuffleArray(problemIndexArray);
+  currentProblemIndex = 0;
+}
+
+/* 게임 시작 */
+function startGame(){
+  const nameInput = document.getElementById("playerName");
+  const radios = document.getElementsByName("difficulty");
+  
+  if(!nameInput.value) {
+    alert("이름을 입력하세요!");
+    return;
+  }
+  player = nameInput.value;
+  
+  let diffVal = "low";
+  for(const r of radios) {
+    if(r.checked){ 
+      diffVal = r.value; 
+      break; 
+    }
+  }
+  difficulty = diffVal;
+  
+  // 난이도별 시간 제한, 점수 설정
+  if(difficulty === "top"){
+    timeLimitPerQuestion = 20;
+    pointsPerQuestion = 20;
+  } else if(difficulty === "high"){
+    timeLimitPerQuestion = 30;
+    pointsPerQuestion = 15;
+  } else if(difficulty === "mid"){
+    timeLimitPerQuestion = 40;
+    pointsPerQuestion = 13;
+  } else {
+    timeLimitPerQuestion = Infinity;
+    pointsPerQuestion = 10;
+  }
+  
+  // 초기화
+  life = 3;
+  score = 0;
+  globalTime = 0;
+  
+  document.getElementById("lifeCount").innerText = life;
+  document.getElementById("score").innerText = score;
+  document.getElementById("globalTimeLabel").innerText = "전체 게임 시간: 0초";
+  
+  initProblemIndexArray();
+  
+  // 화면 전환
+  document.getElementById("startScreen").style.display = "none";
+  document.getElementById("gameScreen").style.display = "block";
+  document.getElementById("resultContainer").style.display = "none";
+  
+  // 전체 게임 시간 타이머
+  if(globalTimeInterval) clearInterval(globalTimeInterval);
+  globalTimeInterval = setInterval(()=>{
+    globalTime++;
+    document.getElementById("globalTimeLabel").innerText = "전체 게임 시간: " + globalTime + "초";
+  }, 1000);
+  
+  // 다음 문제 표시
+  showNextProblem();
+}
+
+/* 문제 표시 */
+function showNextProblem(){
+  if(life <= 0) {
+    endGame();
+    return;
+  }
+  
+  // (무제한 모드는 시간을 재설정하지 않음)
+  if(difficulty !== "low"){
+    currentEnergy = timeLimitPerQuestion;
+  } else {
+    currentEnergy = Infinity;
+  }
+  
+  const qContainer = document.getElementById("questionContainer");
+  qContainer.innerHTML = "";
+  document.getElementById("feedback").innerText = "";
+  
+  // 인덱스 순환 -> 모두 끝나면 다시 셔플(무한)
+  if(currentProblemIndex >= problemIndexArray.length){
+    initProblemIndexArray();
+  }
+  
+  const pIndex = problemIndexArray[currentProblemIndex];
+  const prob = problems[pIndex];
+  currentProblemIndex++;
+  
+  // 보기 섞기
+  shuffleChoices(prob);
+  
+  // 문제 표시
+  const qDiv = document.createElement("div");
+  qDiv.innerHTML = `<p>${prob.question}</p>`;
+  
+  // 보기 표시 (radio)
+  prob.choices.forEach((c, idx)=>{
+    const choiceDiv = document.createElement("div");
+    choiceDiv.className = "choiceItem";
+    
+    const choiceId = "choice_"+idx;
+    choiceDiv.innerHTML = `
+      <label>
+        <input type="radio" name="answerOption" value="${idx}">
+        <span>${c.text}</span>
+      </label>
+    `;
+    
+    qDiv.appendChild(choiceDiv);
+  });
+  
+  // 제출 버튼
+  const submitBtn = document.createElement("button");
+  submitBtn.innerText = "제출";
+  submitBtn.onclick = ()=>{
+    checkAnswer(prob);
+  };
+  qDiv.appendChild(document.createElement("br"));
+  qDiv.appendChild(submitBtn);
+  
+  qContainer.appendChild(qDiv);
+  
+  // 수식 렌더링
+  MathJax.typeset();
+  
+  // 에너지바/타이머 시작
+  if(energyInterval) clearInterval(energyInterval);
+  if(difficulty !== "low"){
+    energyInterval = setInterval(()=>{
+      currentEnergy -= 1;
+      updateEnergyBar();
+      if(currentEnergy <= 0){
+        // 시간초과
+        clearInterval(energyInterval);
+        handleTimeOver(prob);
+      }
+    }, 1000);
+  } else {
+    // 하 난이도: 에너지바 무제한
+    updateEnergyBar();
+  }
+}
+
+/* 에너지바 업데이트 */
+function updateEnergyBar(){
+  const bar = document.getElementById("energyBar");
+  
+  if(difficulty === "low"){
+    // 무제한 -> 풀바로 표시
+    bar.style.width = "100%";
+    return;
+  }
+  let ratio = currentEnergy / timeLimitPerQuestion;
+  if(ratio < 0) ratio = 0;
+  if(ratio > 1) ratio = 1;
+  
+  bar.style.width = (ratio*100)+"%";
+}
+
+/* 시간 초과 시 */
+function handleTimeOver(prob){
+  document.getElementById("feedback").innerText = "시간 초과! 기회를 1 소모합니다.";
+  life--;
+  document.getElementById("lifeCount").innerText = life;
+  
+  // 정답 알려주기
+  const correctText = prob.choices.find(c=>c.isCorrect)?.text || "";
+  document.getElementById("feedback").innerText += 
+    " 정답은 [" + correctText + "] 였습니다.";
+  
+  setTimeout(()=>{
+    if(life <= 0) {
+      endGame();
+    } else {
+      showNextProblem();
+    }
+  }, 2000);
+}
+
+/* 정답 확인 */
+function checkAnswer(prob){
+  if(energyInterval) clearInterval(energyInterval);
+  
+  const radios = document.getElementsByName("answerOption");
+  let userIdx = -1;
+  for(const r of radios){
+    if(r.checked){
+      userIdx = parseInt(r.value,10);
+      break;
+    }
+  }
+  if(userIdx < 0){
+    alert("보기를 선택하세요!");
+    return;
+  }
+  
+  const chosen = prob.choices[userIdx];
+  
+  if(chosen.isCorrect){
+    // 정답
+    score += pointsPerQuestion;
+    document.getElementById("score").innerText = score;
+    document.getElementById("feedback").innerText = "정답입니다! 점수 +"+pointsPerQuestion;
+    setTimeout(()=>{
+      showNextProblem();
+    }, 1500);
+  } else {
+    // 오답
+    life--;
+    document.getElementById("lifeCount").innerText = life;
+    const correctText = prob.choices.find(c=>c.isCorrect)?.text || "";
+    document.getElementById("feedback").innerText = 
+      "틀렸습니다. 정답은 [" + correctText + "] 였습니다.";
+    
+    setTimeout(()=>{
+      if(life <= 0){
+        endGame();
+      } else {
+        showNextProblem();
+      }
+    }, 2000);
+  }
+}
+
+/* 게임 종료 */
+function endGame(){
+  if(energyInterval) clearInterval(energyInterval);
+  if(globalTimeInterval) clearInterval(globalTimeInterval);
+  
+  document.getElementById("gameScreen").style.display = "none";
+  document.getElementById("resultContainer").style.display = "block";
+  document.getElementById("finalScore").innerText = score;
+  document.getElementById("finalTime").innerText = globalTime;
+}
+
+/* 점수 전송 */
+function submitScore(){
+  // 주어진 함수를 그대로 사용
+  saveData(
+    "지수 방정식 응용과 활용(근과 계수의 관계, 문장제)",
+    player,
+    score,
+    globalTime
+  );
+}
+
+/* 서버 전송 함수 */
+async function saveData(game, name, score, elapsedTime) {
+    const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+    const requestData = {
+        game,
+        name,
+        score: parseInt(score, 10),
+        elapsedTime: parseInt(elapsedTime, 10)
+    };
+
+    try {
+        const response = await fetch(FUNCTION_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        const responseData = await response.json();
+
+        if (response.ok) {
+            document.getElementById('response').innerText = 
+              `성공: ${JSON.stringify(responseData, null, 2)}`;
+        } else {
+            document.getElementById('response').innerText = 
+              `오류: ${JSON.stringify(responseData, null, 2)}`;
+        }
+    } catch (error) {
+        console.error('요청 실패:', error);
+        document.getElementById('response').innerText = 
+            `네트워크 오류: ${error.message}`;
+    }
+}
+</script>
+</body>
+</html>
